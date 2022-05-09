@@ -13,9 +13,9 @@ usa <- readOGR(paste(shape_files, "USA", sep = ""))
 usa <- usa[usa$STATE_NAME != "Alaska",]
 usa <- usa[usa$STATE_NAME != "Hawaii",]
 globe <- readOGR(paste(shape_files, "Continents", sep = ""))
-NAm <- globe[globe$CONTINENT == "North America",]
-NAm <- crop(NAm, extent(-165, -60, 8, 85))
-usaWGS <- spTransform(usa, CRS(proj4string(NAm)))
+nam <- globe[globe$CONTINENT == "North America",]
+nam <- crop(nam, extent(-165, -60, 8, 85))
+usaWGS <- spTransform(usa, CRS(proj4string(nam)))
 
 
 #using all North American records but just the US species list (so that border pixels aren't affected)

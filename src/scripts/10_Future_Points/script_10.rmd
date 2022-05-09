@@ -1,0 +1,307 @@
+---
+title: "North American Bee Data - Generate Future Observations"
+author: "Dr. Nicolas J. Dowdy"
+initial_date: "2021-01-06"
+last_edit_date: "2022-04-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(12345) # set seed for code reproducibility
+# set resource locations
+date <- "20220404"
+input_csv_location = "../../inputs/csv_data/specieslist.csv"
+input_NN_location = "../../inputs/csv_data/20220404_NN_Distances.csv"
+input_observations_location = "../../inputs/csv_data/20220404_observations.csv"
+raster_location = "../../inputs/range_data_rasters/"
+shape_files_location = "../../inputs/shape_files/"
+outputs <- "../../outputs/10_Future_Points/"
+species_list_out <- paste(outputs, paste("specieslist_out_", date, ".csv", sep=""), sep="")
+```
+## Summary of Input Data
+
+The file "../../inputs/csv_data/specieslist.csv" contains a list of 3685 North American species of Hymenoptera. 
+For each taxon, this file contains:
+  1. Family Name
+  2. Genus Name
+  3. Species Name
+  4. "Name" (genus_species)
+  5. Corresponding Number of Occurrence Records
+
+Spatial polygons have been previously generated for each taxon and are composed of two files with extensions ".grd" and ".gri". The corresponding files for each taxon are stored in:
+
+1. `../../inputs/range_data_rasters/30km_Family_Genus_species_raster.grd`
+2. `../../inputs/range_data_rasters/30km_Family_Genus_species_raster.gri`
+
+** Note: due to size, these are not stored in the git repository and must be obtained from the FigShare repostory and extracted to 'inputs/range_data_rasters/'
+
+## Code
+
+Read in each range file, calculate the area of each polygon (see area() in *raster* package), add the calculated area to the csv document. 
+
+* Loop over species
+* Read in raster
+* Measure area of range
+* Write out in in new columns of "specieslist.csv":
+  * Range size
+  * Range size as a proportion of continental US area, plus Alaska and Hawaii
+  * Total number of records needed (this would be the 6 mil potentially digitizable records)
+    * Assume there are ~2 million digitized in this dataset and ~6 million undigitized, but potentially digitizable specimen records
+    * How can we estimate the distribution of these 6 million records over these taxa?
+      * Option 1: evenly distributed
+        * Probably not realistic; assumes prior digitization has occurred in proportion to holdings
+      * Option 2: differentially weighted based on some metric (e.g., range size, proportion of currently digitized records, etc)
+        * Not clear what criteria would best capture the number of remaining undigitized specimens for all species
+  * New records added (total records needed - current records)
+* Based on number of "New Records Added", generate N random lat/long points within each species' range
+* Export generated lat/longs into a csv file for each corresponding taxon
+  * Artificial Observation ID, Family, Genus, Species, Latitude, Longitude
+
+```{r}
+# load libraries
+library(raster)
+library(rgdal) 
+library(rgeos)
+library(dplyr)
+library(progress) # creates progress bars
+
+## read in the shape files and crop
+usa=readOGR(paste(shape_files_location, "usa" ,sep=""))
+globe=readOGR(paste(shape_files_location, "continents" ,sep=""))
+NAm=globe[globe$CONTINENT=='North America',]
+NAm=crop(NAm,extent(-165,-60,8,85))
+usaWGS=spTransform(usa,CRS(proj4string(NAm)))
+
+df <- as.data.frame(read.csv(input_csv_location)) # load data
+taxa <- unique(df$name) # get a list of unique taxa
+grd_files <- list.files(raster_location, pattern = "\\.grd$") # generate a list of raster locations
+name <- c() # allocate as a temporary list
+area_range <- c() # allocate as a temporary list
+area_prop_blocks_range <- c() # allocate as a temporary list
+area_prop_USA_range <- c() # allocate as a temporary list
+range_cell_resolution <- 30 # resolution of range data in square km
+number_of_records_to_simulate <- 4700000
+simulation_point_overlap_perc <- 0.76
+range_buffer_size <- 0 # contract range by X km before generating new points
+dedupe <- FALSE # boolean to dedupe observation data or not
+dedupe_filter_list <- c('finalLatitude', 'finalLongitude') # list of factors to deduplicate on
+if(dedupe){
+    dedupe_label = "DEDUPE"
+} else {
+    dedupe_label = "DUPES"
+}
+problem_taxa_output <- paste("../output/", date, "_NN_problem_taxa_", dedupe_label, as.character(100*simulation_point_overlap_perc) "_RUN.csv", sep="")
+no_point_taxa_output <- paste("../output/", date, "_NN_no_point_taxa_", dedupe_label, as.character(100*simulation_point_overlap_perc) "_RUN.csv", sep="")
+new_points_output <- paste("../output/", date, "_NN_new_points_", dedupe_label, as.character(100*simulation_point_overlap_perc) "_RUN.csv", sep="")
+```
+
+## Begin Calculating Number of Future Points Per Taxon
+
+```{r echo=FALSE}
+pb <- progress_bar$new(format = "[:bar] :current/:total (:percent); eta: :eta", total = length(taxa)) # format progress bar
+pb$tick(0) # set start progress
+print("Starting Loop. Go get some tea!")
+## for loop could use some speed up from for_each package
+for (taxon in taxa) { # for each taxon in the csv file:
+  taxon <- paste(taxon,'_', sep='') # add '_' to end to avoid matching similar names
+  pb$tick()
+  # taxon = "Epeoloides_pilosulus_" # for testing
+  # taxon = "Andrena_accepta_" # for testing
+  raster_file = grd_files[grep(taxon, grd_files)] # find the taxon raster file
+  # place a conditional here in case raster is not found
+  raster = raster(paste(raster_location, raster_file, sep="")) # load the raster
+  raster_usawgs = mask(raster, usaWGS) # mask the raster to the USA shapefile
+  raster_nam = mask(raster, NAm) # mask the raster to the North America shapefile
+  # plot(raster_usawgs) # plot the raster as sanity check
+  df_area <- as.data.frame(raster_usawgs, xy=T) # store the range + USA data in data frame
+  colnames(df_area) <- c("long", "lat", "presence_absence") # change the column names for easy referencing
+  df_area$presence_absence <- as.factor(df_area$presence_absence) # change presence_absence column into factor variable for plotting
+  df_area_restrict <- df_area[!is.na(df_area$presence_absence),] # generate data frame containing only non-NA presence/absence data (not totally necessary, but I prefer it)
+  
+  # calculate area
+  area <- (count((df_area_restrict %>% filter(presence_absence == 1)))*range_cell_resolution*range_cell_resolution)$n # area of range (220km*220km resolution)
+  # wikipedia data:
+  # total area of all 50 states: 9,833,517 km2
+  # '                ' contiguous US: 8,081,867 km2
+  # total land area of all 50 state: 9,147,593 km2
+  # '                ' contiguous US: 7,653,004 km2
+  # calculated from raster: 13,019,600 km2
+  area_prop_blocks <- area / (nrow(df_area_restrict)*range_cell_resolution*range_cell_resolution) # area of range relative to total area of USA (220km*220km resolution); this large resolution leads to large overestimate of area
+  area_prop_USA <- area / 9833517 # area of range relative to reference area of USA (this will lead to slightly larger proportional range sizes due to ranges being at 220km*220km resolution; in other words, USA-restricted ranges are overestimated here due to block size)
+  
+  # store values for writing
+  name <- c(name, substr(taxon, 1, nchar(taxon)-1))
+  area_range <- c(area_range, area)
+  area_prop_blocks_range <- c(area_prop_blocks_range, area_prop_blocks)
+  area_prop_USA_range <- c(area_prop_USA_range, area_prop_USA)
+}
+temp <- data.frame(name, area_range, area_prop_blocks_range, area_prop_USA_range) # combine temp lists
+new_df <- left_join(df, temp, by="name") # join temp data frame with csv data frame
+write.csv(new_df,species_list_out, row.names = FALSE) # save new_df as "specieslist_out_DATE.csv"
+```
+
+## Determine Potential Number of Undigitized Records 
+
+* Get sum of all ranges ("total_range_sum")
+* Allocate proportion of simulated records for each species as:
+    * ((area_range / total_range_sum) * number_of_records_to_simulate) - number_existing_occurrence
+
+```{r}
+# new_df <- read.csv(species_list_out) # load this rather than repeat chunk above
+total_range_sum <- sum(new_df$area_range, na.rm = TRUE) # sum area of all ranges
+new_df <- new_df %>% mutate(record_prop = area_range / total_range_sum) # calculate proportion of each range relative to sum of all ranges
+new_df <- new_df %>% mutate(num_records_to_sample = (number_of_records_to_simulate * record_prop)) # calculate number of undigitized records
+write.csv(new_df,species_list_out, row.names = FALSE) # write out results
+# ggplot(data=new_df %>% filter(num_records_to_sample2 > 0)) + geom_histogram(aes(x=num_records_to_sample2), binwidth = 250)+theme_classic()+scale_x_continuous(breaks=seq(0,20000,1000))
+# df <- as.data.frame(read.csv(species_list_out)) # load previously output data
+# ggplot(df, aes(x=1, y=num_records_to_sample)) + geom_boxplot() + geom_jitter(shape=16, position=position_jitter(0.2)) + scale_y_log10() + theme_bw()
+# df_warn <- df %>% filter(num_records_to_sample < 3)
+```
+
+## Generate Future Observations
+
+Here, pre-calculated nearest neighbor distances for each taxon are used to generate future observations.
+
+```{r}
+## Load in previously calculated number of new points to generate for each taxon
+df <- as.data.frame(read.csv(species_list_out)) # load previously output data
+taxa <- unique(df$name) # get a list of unique taxa
+## Load in previously calculated NN values for each taxon
+nn <- as.data.frame(read.csv(input_NN_location))
+## Load in observed GPS coordinates for each taxon
+observations <- as.data.frame(read.csv(input_observations_location))
+
+# taxa <- taxa[2283:length(taxa)] # use this to restart a run that fails
+point_id = 1
+problem_id = 1
+no_point_id = 1
+#point_id = 598704 # use this to restart a run that fails
+#problem_id = 2 # use this to restart a run that fails
+#no_point_id = 1 # use this to restart a run that fails
+
+pb <- progress_bar$new(format = "[:bar] :current/:total (:percent); eta: :eta", total = length(taxa)) # format progress bar
+pb$tick(0) # set start progress
+print("Starting Loop. Go get some coffee!")
+for (taxon in taxa) { # for each taxon in the csv file:
+  family <- c() # allocate as a temporary list
+  name <- c() # allocate as a temporary list
+  genus <- c() # allocate as a temporary list
+  species <- c() # allocate as a temporary list
+  new_lat_list <- c() # allocate as a temporary list
+  new_long_list <- c() # allocate as a temporary list
+  problem_taxa <- c() # allocate as a temporary list
+  no_points_taxa <- c() # allocate as a temporary list
+  # taxon = "Agapostemon_splendens" # for testing
+  taxon_ <- paste(taxon,'_', sep='') # add '_' to end to avoid matching similar names
+  pb$tick(1) # increment progress
+  total_new_points <- df %>% filter(name == taxon) %>% select(num_records_to_sample) # look up how many new points that taxon requires
+  new_point_count <- round(simulation_point_overlap_perc * total_new_points) # how many points at unique positions
+  stacked_point_count <- round((1-simulation_point_overlap_perc) * total_new_points) # how many points to stack
+  nn_value <- nn %>% filter(finalName == taxon) %>% select(tNN) # look up NN value for that taxon (km)
+  obs <- observations %>% filter(finalName == sub('_', ' ', taxon)) # look up GPS data for that taxon
+  if(dedupe) {
+    # obs <- unique(obs[,dedupe_filter_list])
+    obs <- obs [!duplicated(obs[dedupe_filter_list]),]
+  }
+  # LOAD RASTER DATA
+  raster_file = grd_files[grep(taxon_, grd_files)] # find the taxon raster file
+  raster = raster(paste(raster_location, raster_file, sep="")) # load the raster
+  raster_usawgs = mask(raster, usaWGS) # mask the raster to the USA shapefile
+  # raster_nam = mask(raster, NAm) # mask the raster to the North America shapefile
+  # COMPUTE LAT/LONG COMBINATIONS THAT  COUNT AS "IN RANGE"
+  df_area <- as.data.frame(raster_usawgs, xy=T) # store the range + USA data in data frame
+  colnames(df_area) <- c("long", "lat", "presence_absence") # change the column names for easy referencing
+  df_area$presence_absence <- as.factor(df_area$presence_absence) # change presence_absence column into factor variable for plotting
+  df_area_restrict <- df_area[!is.na(df_area$presence_absence),] # generate data frame containing only non-NA presence/absence data (not totally necessary, but I prefer it)
+  range <- df_area_restrict[df_area_restrict$presence_absence==1,] # get blocks that are part of range
+  new_lats <- c() # temporary local list
+  new_longs <- c() # temporary local list
+  i = 0
+  break_state <- FALSE
+  points_added = 0
+  while (points_added < as.integer(new_point_count) & i < 500 & break_state == FALSE){
+    sample_row <- obs[sample(nrow(obs), size = 1, replace = TRUE),] # select a point at random from the previously observed GPS point data
+    if(nrow(sample_row)>0){
+      sample_lat <- sample_row$finalLatitude # extract point latitude
+      sample_long <- sample_row$finalLongitude # extract point longitude
+      if (!is.na(sample_lat) & !is.na(sample_long)){
+        # assume 1km = 0.01 degree
+        # radius = (as.integer(nn_value)/2)/100
+        radius = (as.integer(nn_value))/100
+        # randomly sample a sufficient number of new GPS point within a circle with radius equal to NN distance of species around this random point
+        r <- sqrt(runif(1, min=0, max=radius*radius))
+        alpha <- runif(1, min=0, max=2*pi)
+        x <- r*cos(alpha)+sample_long  # new long
+        y <- r*sin(alpha)+sample_lat  # new lat
+        in_range = any(abs(round(range$lat - y, digits=2))<=(range_cell_resolution/200) & abs(round(range$long - x, digits=2))<=(range_cell_resolution/200)) # if new point in any range cells
+        if (in_range == TRUE){
+            new_longs <- c(new_longs, x)
+            new_lats <- c(new_lats, y)
+            points_added = points_added + 1
+            i = 0
+        }
+      }
+    } else {
+      break_state <- TRUE
+    }
+    i = i + 1
+  }
+  if (i == 500){
+    write.table(data.frame(problem_id,
+                           obs$family[1],
+                           sapply(strsplit(taxon,"_"), `[`, 1),
+                           sapply(strsplit(taxon,"_"), `[`, 2),
+                           taxon), problem_taxa_output, row.names = FALSE, col.names = FALSE, append = TRUE, sep=",") # save data
+    problem_id = problem_id+1
+  }
+  # Add stacked points
+  break_state <- FALSE
+  stacked_points_added = 0
+  while (stacked_points_added < as.integer(stacked_point_count) & break_state == FALSE){
+    sample_row <- obs[sample(nrow(obs), size = 1, replace = TRUE),] # select a point at random from the previously observed GPS point data
+    if(nrow(sample_row)>0){
+      sample_lat <- sample_row$finalLatitude # extract point latitude
+      sample_long <- sample_row$finalLongitude # extract point longitude
+      if (!is.na(sample_lat) & !is.na(sample_long)){
+        new_longs <- c(new_longs, sample_long)
+        new_lats <- c(new_lats, sample_lat)
+      }
+    } else {
+      break_state <- TRUE
+      print("STACKED POINT ERROR!")
+    }
+    stacked_points_added = stacked_points_added + 1
+  }
+  total_points_added = points_added + stacked_points_added
+  # check plots:
+  # plot(raster_usawgs)
+  # points(obs$decimalLongitude, obs$decimalLatitude, pch=19, col=rgb(0,0,0,0.1))
+  # points(new_longs, new_lats, pch=19, col=rgb(1,0,0,0.1))
+  # points(sample_long, sample_lat, col="black", pch=23)
+  # abline(v = sample_long+(as.integer(nn_value)/2), col="red")
+  # abline(v = sample_long-(as.integer(nn_value)/2), col="red")
+  # abline(h = sample_lat+(as.integer(nn_value)/2), col="blue")
+  # abline(h = sample_lat-(as.integer(nn_value)/2), col="blue")
+  # store values for writing
+  if (total_points_added != 0){
+    point_ids <- seq(point_id, total_points_added+point_id-1,1)
+    point_id = max(point_ids)+1
+    family <- c(family, rep(obs$family[1], length(new_longs)))
+    genus <- c(genus, rep(sapply(strsplit(taxon,"_"), `[`, 1), length(new_longs))) # split genus name
+    species <- c(species, rep(sapply(strsplit(taxon,"_"), `[`, 2), length(new_longs))) # split species name 
+    name <- c(name, rep(taxon, length(new_longs)))
+    new_long_list <- c(new_long_list, new_longs)
+    new_lat_list <- c(new_lat_list, new_lats)
+    temp <- data.frame(point_ids, family, genus, species, name, new_lat_list, new_long_list) # combine temp lists
+    write.table(temp, new_points_output, row.names = FALSE, col.names = FALSE, append = TRUE, sep=",") # save data
+  } else {
+    write.table(data.frame(no_point_id,
+                           obs$family[1],
+                           sapply(strsplit(taxon,"_"), `[`, 1),
+                           sapply(strsplit(taxon,"_"), `[`, 2),
+                           taxon), no_point_taxa_output, row.names = FALSE, col.names = FALSE, append = TRUE, sep=",") # save data
+    no_point_id = no_point_id+1
+  }
+}
+```
