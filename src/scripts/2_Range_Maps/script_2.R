@@ -10,9 +10,9 @@ outputs <- "../../outputs/2_Range_Maps/"
 
 usa <- readOGR(paste(shape_files, "USA", sep = ""))
 globe <- readOGR(paste(shape_files, "Continents", sep = ""))
-NAm <- globe[globe$CONTINENT == "North America", ]
-NAm <- crop(NAm, extent(-165, -60, 8, 85))
-usaWGS <- spTransform(usa, CRS(proj4string(NAm)))
+nam <- globe[globe$CONTINENT == "North America",]
+nam <- crop(nam, extent(-165, -60, 8, 85))
+usaWGS <- spTransform(usa, CRS(proj4string(nam)))
 
 alldat <- read.csv(paste(csv_files, "NorAmer_highQual_only_ALLfamilies.csv"), sep = "")
 spListAll <- read.csv(paste(csv_files, "contiguousSpecies_high_Only.csv"), sep = "")
@@ -103,45 +103,45 @@ sp_tooFewCoords <- rbind(sp_tooFewCoords, additional43)
 
 
 ##crop lists by family (first, the ones that have ENOUGH coords)
-alldatAnd <- alldat[grepl("Andrenidae", alldat$family), ]
+alldatAnd <- alldat[grepl("Andrenidae", alldat$family),]
 alldatAnd <- dplyr::select(alldatAnd, (-X)) #don't want that column
-spListAnd <- spList[grepl("Andrenidae", spList$family), ]
+spListAnd <- spList[grepl("Andrenidae", spList$family),]
 spListAnd <- dplyr::select(spListAnd, (-X)) #don't want that column
 
-alldatColl <- alldat[grepl("Colletidae", alldat$family), ]
+alldatColl <- alldat[grepl("Colletidae", alldat$family),]
 alldatColl <- dplyr::select(alldatColl, (-X))
-spListColl <- spList[grepl("Colletidae", spList$family), ]
+spListColl <- spList[grepl("Colletidae", spList$family),]
 spListColl <- dplyr::select(spListColl, (-X))
 
-alldatMeg <- alldat[grepl("Megachilidae", alldat$family), ]
+alldatMeg <- alldat[grepl("Megachilidae", alldat$family),]
 alldatMeg <- dplyr::select(alldatMeg, (-X))
-spListMeg <- spList[grepl("Megachilidae", spList$family), ]
+spListMeg <- spList[grepl("Megachilidae", spList$family),]
 spListMeg <- dplyr::select(spListMeg, (-X))
 
-alldatMel <- alldat[grepl("Melittidae", alldat$family), ]
+alldatMel <- alldat[grepl("Melittidae", alldat$family),]
 alldatMel <- dplyr::select(alldatMel, (-X))
-spListMel <- spList[grepl("Melittidae", spList$family), ]
+spListMel <- spList[grepl("Melittidae", spList$family),]
 spListMel <- dplyr::select(spListMel, (-X))
 
-alldatHal <- alldat[grepl("Halictidae", alldat$family), ]
+alldatHal <- alldat[grepl("Halictidae", alldat$family),]
 alldatHal <- dplyr::select(alldatHal, (-X))
-spListHal <- spList[grepl("Halictidae", spList$family), ]
+spListHal <- spList[grepl("Halictidae", spList$family),]
 spListHal <- dplyr::select(spListHal, (-X))
 
-alldatApi <- alldat[grepl("Apidae", alldat$family), ]
+alldatApi <- alldat[grepl("Apidae", alldat$family),]
 alldatApi <- dplyr::select(alldatApi, (-X))
-spListApi <- spList[grepl("Apidae", spList$family), ]
+spListApi <- spList[grepl("Apidae", spList$family),]
 spListApi <- dplyr::select(spListApi, (-X))
 
 
 #make individual family dfs for this subset too (NOT ENOUGH cords to make MCP)
 #461 total
-sp_tooFewCoordsAnd <- sp_tooFewCoords[grepl("Andrenidae", sp_tooFewCoords$family), ]
-sp_tooFewCoordsColl <- sp_tooFewCoords[grepl("Colletidae", sp_tooFewCoords$family), ]
-sp_tooFewCoordsMeg <- sp_tooFewCoords[grepl("Megachilidae", sp_tooFewCoords$family), ]
-sp_tooFewCoordsMel <- sp_tooFewCoords[grepl("Melittidae", sp_tooFewCoords$family), ] #none
-sp_tooFewCoordsHal <- sp_tooFewCoords[grepl("Halictidae", sp_tooFewCoords$family), ]
-sp_tooFewCoordsApi <- sp_tooFewCoords[grepl("Apidae", sp_tooFewCoords$family), ]
+sp_tooFewCoordsAnd <- sp_tooFewCoords[grepl("Andrenidae", sp_tooFewCoords$family),]
+sp_tooFewCoordsColl <- sp_tooFewCoords[grepl("Colletidae", sp_tooFewCoords$family),]
+sp_tooFewCoordsMeg <- sp_tooFewCoords[grepl("Megachilidae", sp_tooFewCoords$family),]
+sp_tooFewCoordsMel <- sp_tooFewCoords[grepl("Melittidae", sp_tooFewCoords$family),] #none
+sp_tooFewCoordsHal <- sp_tooFewCoords[grepl("Halictidae", sp_tooFewCoords$family),]
+sp_tooFewCoordsApi <- sp_tooFewCoords[grepl("Apidae", sp_tooFewCoords$family),]
 
 
 
@@ -165,7 +165,7 @@ for (i in seq_len(nrow(spListApi))) {
   sp <- dplyr::select(sp, finalLongitude, finalLatitude)
 
   ch <- chull(sp)
-  coords <- sp[c(ch, ch[1]), ] #closed polygon
+  coords <- sp[c(ch, ch[1]),] #closed polygon
 
   pols <- SpatialPolygons(list(Polygons(list(Polygon(coords)), 1)), proj4string = CRS("+proj=longlat +datum=WGS84"))
 
@@ -180,24 +180,24 @@ for (i in seq_len(nrow(spListApi))) {
   #7 is the column for LF type abbreviation, that's why it keeps being used
   #stack() grids of landfire_keepers
   if (nrow(ppsub2) == 1) {
-    Mask <- get(ppsub2[1, 7])
+    mask <- get(ppsub2[1, 7])
   } else if (nrow(ppsub2) == 2) {
-    Mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]))
+    mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]))
   } else if (nrow(ppsub2) == 3) {
-    Mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]))
+    mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]))
   } else if (nrow(ppsub2) == 4) {
-    Mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]), get(ppsub2[4, 7]))
+    mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]), get(ppsub2[4, 7]))
   } else if (nrow(ppsub2) == 5) {
-    Mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]), get(ppsub2[4, 7]), get(ppsub2[5, 7]))
+    mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]), get(ppsub2[4, 7]), get(ppsub2[5, 7]))
   } else if (nrow(ppsub2) == 7) {
-    Mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]), get(ppsub2[4, 7]), get(ppsub2[5, 7]), get(ppsub2[7, 7]))
+    mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]), get(ppsub2[4, 7]), get(ppsub2[5, 7]), get(ppsub2[7, 7]))
   } else if (nrow(ppsub2) == 7) {
-    Mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]), get(ppsub2[4, 7]), get(ppsub2[5, 7]), get(ppsub2[7, 7]), get(ppsub2[7, 7]))
+    mask <- merge(get(ppsub2[1, 7]), get(ppsub2[2, 7]), get(ppsub2[3, 7]), get(ppsub2[4, 7]), get(ppsub2[5, 7]), get(ppsub2[7, 7]), get(ppsub2[7, 7]))
   }
 
-  Mask1 <- resample(Mask, r1) #ensure that resolution and extents match
+  mask1 <- resample(mask, r1) #ensure that resolution and extents match
 
-  spRangeN <- mask(r1, Mask1)
+  spRangeN <- mask(r1, mask1)
   writeRaster(spRangeN, overwrite = TRUE, file = paste(paste(paste(outputs, "Ranges/Apidae/10km", sep = ""), paste(spListApi[i, 1]), sep = "/"), "raster.grd", sep = "_"))
 
   #sample up from 10x10 km to make the other four resolutions

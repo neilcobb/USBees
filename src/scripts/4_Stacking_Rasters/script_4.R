@@ -11,9 +11,9 @@ script2outputs <- "../../outputs/2_Range_Maps/"
 
 usa <- readOGR(paste(shape_files, "USA", sep = ""))
 globe <- readOGR(paste(shape_files, "Continents", sep = ""))
-NAm <- globe[globe$CONTINENT == "North America",]
-NAm <- crop(NAm, extent(-165, -60, 8, 85))
-usaWGS <- spTransform(usa, CRS(proj4string(NAm)))
+nam <- globe[globe$CONTINENT == "North America",]
+nam <- crop(nam, extent(-165, -60, 8, 85))
+usaWGS <- spTransform(usa, CRS(proj4string(nam)))
 
 
 spList <- read.csv(paste(csv_files, "contiguousSpecies_high_Only.csv"), sep = "")
@@ -21,7 +21,7 @@ spList <- read.csv(paste(csv_files, "contiguousSpecies_high_Only.csv"), sep = ""
 spList <- dplyr::select(spList, (-X)) #don't want that column
 
 
-##crop lists by family 
+##crop lists by family
 spListAnd <- spList[grepl("Andrenidae", spList$family),]
 spListColl <- spList[grepl("Colletidae", spList$family),]
 spListMeg <- spList[grepl("Megachilidae", spList$family),]
@@ -52,6 +52,6 @@ Apidae220_Full <- mask(ensm, usaWGS)
 box <- c(-125, -65, 25, 50)
 plot(Apidae220_Full, ext = extent(box))
 plot(usaWGS, add = TRUE)
-plot(NAm, add = TRUE)
+plot(nam, add = TRUE)
 writeRaster(Apidae220_Full, overwrite = TRUE, file = paste(outputs, "Ranges/AAA_Family_rasters/220km/Apidae/Apidae220_full.grd", sep = ""))
 

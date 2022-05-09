@@ -9,15 +9,16 @@ library(sf)
 shape_files <- "../../inputs/shape_files/"
 csv_files <- "../../inputs/csv_data/"
 outputs <- "../../outputs/7_Samples_to_Species/"
+script3outputs <- "../../outputs/3_Observed_Richness/"
 
 
 usa <- readOGR(paste(shape_files, "USA", sep = ""))
-usa <- usa[usa$STATE_NAME != 'Alaska',]
-usa <- usa[usa$STATE_NAME != 'Hawaii',]
+usa <- usa[usa$STATE_NAME != "Alaska",]
+usa <- usa[usa$STATE_NAME != "Hawaii",]
 globe <- readOGR(paste(shape_files, "Continents", sep = ""))
-NAm <- globe[globe$CONTINENT == 'North America',]
-NAm <- crop(NAm, extent(-165, -60, 8, 85))
-usaWGS <- spTransform(usa, CRS(proj4string(NAm)))
+nam <- globe[globe$CONTINENT == "North America",]
+nam <- crop(nam, extent(-165, -60, 8, 85))
+usaWGS <- spTransform(usa, CRS(proj4string(nam)))
 
 ## do ALL BEES first
 
@@ -26,7 +27,7 @@ alldat <- read.csv(paste(csv_files, "NorAmer_highQual_only_ALLfamilies.csv"), se
 spList <- read.csv(paste(csv_files, "contiguousSpecies_high_Only.csv"), sep = "")
 spList <- select(spList, (-X))
 
-#step 2 crop the records so that it's only records for the US species
+#step 2 crop the records so that it"s only records for the US species
 #and simplify so just 4 columns
 alldat_other <- anti_join(alldat, spList, by = "finalName") # 86krecords for species not in US period
 alldat_USspecies <- anti_join(alldat, alldat_other, by = "finalName") #good, 2.15 mil records for Nor America that involve the 3169 US species
@@ -51,14 +52,14 @@ r30 <- crop(r30, usaWGS)
 #function = "count" allows points to be counted per pixel
 allPoints <- rasterize(spdf, r30, field = alldat_USspecies$Presence, fun = "count")
 
-#step 6 there are some points included that we don't want, outside of contiguous US
+#step 6 there are some points included that we don"t want, outside of contiguous US
 #we already got rid of AK and HI above, so it must be some in Canada and Mexico and coasts
 #mask to usaWGS again, very explict
 allPoints <- mask(allPoints, usaWGS)
 
 #step 7 make into data frame and sum number of pixels that are included in your area
 allPoints_df <- as.data.frame(allPoints, xy = TRUE)
-allPoints_df <- na.omit(allPoints_df) #gets rid of many NAs that aren't a part of study area
+allPoints_df <- na.omit(allPoints_df) #gets rid of many NAs that aren"t a part of study area
 allPixelsSum <- sum(allPoints_df$layer)
 
 #next, need to mash up these total points per pixel 
@@ -66,20 +67,20 @@ allPixelsSum <- sum(allPoints_df$layer)
 #as well as the number of observed species per pixel
 
 #read in the 30x30 for expected and observed and stack for all bees
-AndObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Andrenidae/Andrenidae30_full_OR.grd")
-ApiObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Apidae/Apidae30_full_OR.grd")
-ColObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Colletidae/Colletidae30_full_OR.grd")
-HalObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Halictidae/Halictidae30_full_OR.grd")
-MegObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Megachilidae/Megachilidae30_full_OR.grd")
-MelObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Melittidae/Melittidae30_full_OR.grd")
+AndObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Andrenidae/Andrenidae30_full_OR.grd", sep = ""))
+ApiObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Apidae/Apidae30_full_OR.grd", sep = ""))
+ColObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Colletidae/Colletidae30_full_OR.grd", sep = ""))
+HalObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Halictidae/Halictidae30_full_OR.grd", sep = ""))
+MegObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Megachilidae/Megachilidae30_full_OR.grd", sep = ""))
+MelObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Melittidae/Melittidae30_full_OR.grd", sep = ""))
 all30obs <- AndObserved30 + ApiObserved30 + ColObserved30 + HalObserved30 + MegObserved30 + MelObserved30
 
-AndPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Andrenidae/Andrenidae30_full.grd")
-ApiPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Apidae/Apidae30_full.grd")
-ColPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Colletidae/Colletidae30_full.grd")
-HalPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Halictidae/Halictidae30_full.grd")
-MegPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Megachilidae/Megachilidae30_full.grd")
-MelPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Melittidae/Melittidae30_full.grd")
+AndPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Andrenidae/Andrenidae30_full.grd", sep = ""))
+ApiPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Apidae/Apidae30_full.grd", sep = ""))
+ColPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Colletidae/Colletidae30_full.grd", sep = ""))
+HalPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Halictidae/Halictidae30_full.grd", sep = ""))
+MegPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Megachilidae/Megachilidae30_full.grd", sep = ""))
+MelPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Melittidae/Melittidae30_full.grd", sep = ""))
 
 AndPredict30[is.na(AndPredict30[])] <- 0
 ApiPredict30[is.na(ApiPredict30[])] <- 0
@@ -114,22 +115,18 @@ compiledRaster <- as.data.frame(compiledRaster, xy = TRUE)
 compiledRaster <- compiledRaster %>% rename(Occurrences = layer.1)
 compiledRaster <- compiledRaster %>% rename(PredictedSpecies = layer.2)
 compiledRaster <- compiledRaster %>% rename(Ratio = layer.3)
-compiledRaster <- filter(compiledRaster, PredictedSpecies > 0) #don't want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
+compiledRaster <- filter(compiledRaster, PredictedSpecies > 0) #don"t want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
 
-setwd("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/Point_Density_Output_Files/Using Expected Richness")
-write.csv(compiledRaster, file = "pointDensity_AllBees.csv")
-
-
+write.csv(compiledRaster, file = paste(outputs, "csv/pointDensity_expected_richness_AllBees.csv", sep = ""))
 
 ## NOW do by family
 
 #just reread everything in to verify working with original dataset
-setwd("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges")
-alldat <- read.csv("NorAmer_highQual_only_ALLfamilies.csv")
-spList <- read.csv("contiguousSpecies_high_Only.csv")
-spList <- select(spList, (-X)) #don't want that column
+alldat <- read.csv(paste(csv_files, "NorAmer_highQual_only_ALLfamilies.csv"), sep = "")
+spList <- read.csv(paste(csv_files, "contiguousSpecies_high_Only.csv"), sep = "")
+spList <- select(spList, (-X)) #don"t want that column
 
-#step 2 crop the records so that it's only records for the US species
+#step 2 crop the records so that it"s only records for the US species
 #and simplify so just 4 columns
 alldat_other <- anti_join(alldat, spList, by = "finalName") # 86krecords for species not in US period
 alldat_USspecies <- anti_join(alldat, alldat_other, by = "finalName") #good, 2.15 mil records for Nor America that involve the 3159 US species
@@ -139,12 +136,12 @@ alldat_USspecies <- select(alldat_USspecies, family, finalName, finalLongitude, 
 alldat_USspecies$Presence <- 1
 
 #make into six family groups
-allUSdata_And <- alldat_USspecies[grepl('Andrenidae', alldat_USspecies$family),]
-allUSdata_Api <- alldat_USspecies[grepl('Apidae', alldat_USspecies$family),]
-allUSdata_Meg <- alldat_USspecies[grepl('Megachilidae', alldat_USspecies$family),]
-allUSdata_Hal <- alldat_USspecies[grepl('Halictidae', alldat_USspecies$family),]
-allUSdata_Col <- alldat_USspecies[grepl('Colletidae', alldat_USspecies$family),]
-allUSdata_Mel <- alldat_USspecies[grepl('Melittidae', alldat_USspecies$family),]
+allUSdata_And <- alldat_USspecies[grepl("Andrenidae", alldat_USspecies$family),]
+allUSdata_Api <- alldat_USspecies[grepl("Apidae", alldat_USspecies$family),]
+allUSdata_Meg <- alldat_USspecies[grepl("Megachilidae", alldat_USspecies$family),]
+allUSdata_Hal <- alldat_USspecies[grepl("Halictidae", alldat_USspecies$family),]
+allUSdata_Col <- alldat_USspecies[grepl("Colletidae", alldat_USspecies$family),]
+allUSdata_Mel <- alldat_USspecies[grepl("Melittidae", alldat_USspecies$family),]
 
 
 #step 3 make your points into a spatial Points Data Frame
@@ -190,7 +187,7 @@ allPoints_Hal <- rasterize(spdf_Hal, r30, field = allUSdata_Hal$Presence, fun = 
 allPoints_Col <- rasterize(spdf_Col, r30, field = allUSdata_Col$Presence, fun = "count")
 allPoints_Mel <- rasterize(spdf_Mel, r30, field = allUSdata_Mel$Presence, fun = "count")
 
-#step 6 there are some points included that we don't want, outside of contiguous US
+#step 6 there are some points included that we don"t want, outside of contiguous US
 #we already got rid of AK and HI above, so it must be some in Canada and Mexico and coasts
 #mask to usaWGS again, very explict
 allPoints_And <- mask(allPoints_And, usaWGS)
@@ -202,19 +199,20 @@ allPoints_Mel <- mask(allPoints_Mel, usaWGS)
 
 #read in observed and predicted for each family, do appropriate cropping
 #even if ultimately you are only going to use the predicted rasters
-AndObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Andrenidae/Andrenidae30_full_OR.grd")
-ApiObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Apidae/Apidae30_full_OR.grd")
-ColObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Colletidae/Colletidae30_full_OR.grd")
-HalObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Halictidae/Halictidae30_full_OR.grd")
-MegObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Megachilidae/Megachilidae30_full_OR.grd")
-MelObserved30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Melittidae/Melittidae30_full_OR.grd")
+AndObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Andrenidae/Andrenidae30_full_OR.grd", sep = ""))
+ApiObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Apidae/Apidae30_full_OR.grd", sep = ""))
+ColObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Colletidae/Colletidae30_full_OR.grd", sep = ""))
+HalObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Halictidae/Halictidae30_full_OR.grd", sep = ""))
+MegObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Megachilidae/Megachilidae30_full_OR.grd", sep = ""))
+MelObserved30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Melittidae/Melittidae30_full_OR.grd", sep = ""))
 
-AndPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Andrenidae/Andrenidae30_full.grd")
-ApiPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Apidae/Apidae30_full.grd")
-ColPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Colletidae/Colletidae30_full.grd")
-HalPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Halictidae/Halictidae30_full.grd")
-MegPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Megachilidae/Megachilidae30_full.grd")
-MelPredict30 <- raster("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/AAA_Family_rasters/30km/Melittidae/Melittidae30_full.grd")
+AndPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Andrenidae/Andrenidae30_full.grd", sep = ""))
+ApiPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Apidae/Apidae30_full.grd", sep = ""))
+ColPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Colletidae/Colletidae30_full.grd", sep = ""))
+HalPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Halictidae/Halictidae30_full.grd", sep = ""))
+MegPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Megachilidae/Megachilidae30_full.grd", sep = ""))
+MelPredict30 <- raster(paste(script3outputs, "AAA_Family_rasters/30km/Melittidae/Melittidae30_full.grd", sep = ""))
+
 
 AndPredict30[is.na(AndPredict30[])] <- 0
 ApiPredict30[is.na(ApiPredict30[])] <- 0
@@ -327,17 +325,16 @@ compiledRaster_Mel <- compiledRaster_Mel %>% rename(Occurrences = layer.1)
 compiledRaster_Mel <- compiledRaster_Mel %>% rename(PredictedSpecies = layer.2)
 compiledRaster_Mel <- compiledRaster_Mel %>% rename(Ratio = layer.3)
 
-compiledRaster_And <- filter(compiledRaster_And, PredictedSpecies > 0) #don't want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
-compiledRaster_Api <- filter(compiledRaster_Api, PredictedSpecies > 0) #don't want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
-compiledRaster_Meg <- filter(compiledRaster_Meg, PredictedSpecies > 0) #don't want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
-compiledRaster_Hal <- filter(compiledRaster_Hal, PredictedSpecies > 0) #don't want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
-compiledRaster_Col <- filter(compiledRaster_Col, PredictedSpecies > 0) #don't want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
-compiledRaster_Mel <- filter(compiledRaster_Mel, PredictedSpecies > 0) #don't want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
+compiledRaster_And <- filter(compiledRaster_And, PredictedSpecies > 0) #don"t want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
+compiledRaster_Api <- filter(compiledRaster_Api, PredictedSpecies > 0) #don"t want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
+compiledRaster_Meg <- filter(compiledRaster_Meg, PredictedSpecies > 0) #don"t want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
+compiledRaster_Hal <- filter(compiledRaster_Hal, PredictedSpecies > 0) #don"t want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
+compiledRaster_Col <- filter(compiledRaster_Col, PredictedSpecies > 0) #don"t want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
+compiledRaster_Mel <- filter(compiledRaster_Mel, PredictedSpecies > 0) #don"t want lat/lon points if no predicted value (only want to keep in zeros that live in the "observed" column)
 
-setwd("/Users/paige/Dropbox/Symbiota_database/Gap_analysis copy/Ranges/Point_Density_Output_Files/Using Expected Richness")
-write.csv(compiledRaster_And, file = "pointDensity_Andrenidae.csv")
-write.csv(compiledRaster_Api, file = "pointDensity_Apidae.csv")
-write.csv(compiledRaster_Meg, file = "pointDensity_Megachilidae.csv")
-write.csv(compiledRaster_Hal, file = "pointDensity_Halictidae.csv")
-write.csv(compiledRaster_Col, file = "pointDensity_Colletidae.csv")
-write.csv(compiledRaster_Mel, file = "pointDensity_Melittidae.csv")
+write.csv(compiledRaster_And, file = paste(outputs, "csv/pointDensity_expected_richness_Andrenidae.csv", sep = ""))
+write.csv(compiledRaster_Api, file = paste(outputs, "csv/pointDensity_expected_richness_Apidae.csv", sep = ""))
+write.csv(compiledRaster_Meg, file = paste(outputs, "csv/pointDensity_expected_richness_Megachilidae.csv", sep = ""))
+write.csv(compiledRaster_Hal, file = paste(outputs, "csv/pointDensity_expected_richness_Halictidae.csv", sep = ""))
+write.csv(compiledRaster_Col, file = paste(outputs, "csv/pointDensity_expected_richness_Colletidae.csv", sep = ""))
+write.csv(compiledRaster_Mel, file = paste(outputs, "csv/pointDensity_expected_richness_Melittidae.csv", sep = ""))
